@@ -2,93 +2,81 @@ pipeline {
     agent any
 
     environment {
-        AWS_REGION = 'ap-south-1'
-        ECR_REPO = 'YOUR_ECR_REPOSITORY_NAME'
-        AWS_ACCOUNT_ID = 'YOUR_AWS_ACCOUNT_ID'
-        IMAGE_TAG = "${BUILD_NUMBER}"
+        AWS_REGION = 'us-east-1'
 
-        IMAGE_URI = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG}"
+        IMAGE_NAME = 'static-website'
+        IMAGE_URI  = 'public.ecr.aws/z4f5h9h6/static-website:latest'
 
-        DEPLOY_SERVER = "ubuntu@YOUR_EC2_PUBLIC_IP"
-        CONTAINER_NAME = "garage-website"
+        CONTAINER_NAME = 'static-website'
+        HOST_PORT = '8083'
+        CONTAINER_PORT = '80'
     }
 
     stages {
 
-        stage('Clean Workspace') {
-            steps {
-                cleanWs()
-            }
-        }
-
-        stage('Checkout') {
-            steps {
-                git branch: 'main',
-                    url: 'https://github.com/YOUR_USERNAME/YOUR_REPOSITORY.git'
-            }
-        }
-
         stage('Build Docker Image') {
             steps {
-                sh "docker build -t ${IMAGE_URI} ."
+                sh '''
+                docker build -t ${IMAGE_NAME}:latest .
+                '''
             }
         }
 
-        stage('Login to AWS ECR') {
+        stage('Login to Amazon ECR Public') {
             steps {
-                sh """
-                aws ecr get-login-password --region ${AWS_REGION} | \
-                docker login \
-                --username AWS \
-                --password-stdin \
-                ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
-                """
+                sh '''
+                aws ecr-public get-login-password --region ${AWS_REGION} | \
+                docker login --username AWS --password-stdin public.ecr.aws
+                '''
+            }
+        }
+
+        stage('Tag Image') {
+            steps {
+                sh '''
+                docker tag ${IMAGE_NAME}:latest ${IMAGE_URI}
+                '''
             }
         }
 
         stage('Push Image') {
             steps {
-                sh "docker push ${IMAGE_URI}"
+                sh '''
+                docker push ${IMAGE_URI}
+                '''
             }
         }
 
         stage('Deploy') {
             steps {
-                sshagent(credentials: ['nginx-ssh']) {
+                sh '''
+                docker pull ${IMAGE_URI}
 
-                    sh """
-                    ssh -o StrictHostKeyChecking=no ${DEPLOY_SERVER} '
-                        aws ecr get-login-password --region ${AWS_REGION} | \
-                        docker login \
-                        --username AWS \
-                        --password-stdin \
-                        ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+                docker stop ${CONTAINER_NAME} || true
+                docker rm ${CONTAINER_NAME} || true
 
-                        docker pull ${IMAGE_URI}
-
-                        docker stop ${CONTAINER_NAME} || true
-                        docker rm ${CONTAINER_NAME} || true
-
-                        docker run -d \
-                            --name ${CONTAINER_NAME} \
-                            --restart always \
-                            -p 80:80 \
-                            ${IMAGE_URI}
-                    '
-                    """
-                }
+                docker run -d \
+                    --name ${CONTAINER_NAME} \
+                    --restart always \
+                    -p ${HOST_PORT}:${CONTAINER_PORT} \
+                    ${IMAGE_URI}
+                '''
             }
         }
     }
 
     post {
-
         success {
+            echo '========================================='
             echo 'Deployment Successful'
+            echo 'Website: http://54.234.94.246:8083'
+            echo '========================================='
         }
 
         failure {
+            echo '========================================='
             echo 'Deployment Failed'
+            echo '========================================='
         }
     }
 }
