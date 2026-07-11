@@ -69,7 +69,7 @@ pipeline {
         success {
             echo '========================================='
             echo 'Deployment Successful'
-            echo 'Website: http://54.234.94.246:8083'
+            echo 'Website: http://54.88.185.173:8083/'
             echo '========================================='
         }
 
