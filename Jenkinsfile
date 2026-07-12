@@ -70,7 +70,7 @@ pipeline {
             echo '========================================='
             echo 'Deployment Successful'
             echo 'Website: http://3.80.132.85:8083/'
-            echo '==============this is just commit==========================='
+            echo '==============this is just commitment ==========================='
         }
 
         failure {
