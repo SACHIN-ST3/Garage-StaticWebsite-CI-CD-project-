@@ -2,17 +2,24 @@ pipeline {
     agent any
 
     environment {
+        AWS_REGION = "us-east-1"
 
-        AWS_REGION = 'us-east-1c'
+        IMAGE_NAME = "static-website"
+        IMAGE_TAG  = "latest"
+        IMAGE_URI  = "public.ecr.aws/z4f5h9h6/static-website:latest"
 
-        IMAGE_NAME = 'static-website'
-        IMAGE_TAG  = 'latest'
-        IMAGE_URI  = 'public.ecr.aws/z4f5h9h6/static-website:latest'
+        CLUSTER_NAME = "my-static-website-cluster"
 
-        CLUSTER_NAME = 'my_eks_static_web'
+        DEPLOYMENT_NAME = "static-website"
+        SERVICE_NAME = "static-website-service"
 
-        DEPLOYMENT_NAME = 'static-website'
-        NAMESPACE = 'default'
+        NAMESPACE = "default"
+    }
+
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '10'))
     }
 
     stages {
@@ -23,10 +30,28 @@ pipeline {
             }
         }
 
+        stage('Verify Environment') {
+            steps {
+                sh '''
+                echo "========== Docker =========="
+                docker --version
+
+                echo "========== AWS =========="
+                aws --version
+
+                echo "========== kubectl =========="
+                kubectl version --client
+
+                echo "========== eksctl =========="
+                eksctl version
+                '''
+            }
+        }
+
         stage('Build Docker Image') {
             steps {
                 sh '''
-                    docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
+                docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
                 '''
             }
         }
@@ -34,11 +59,11 @@ pipeline {
         stage('Login to Amazon ECR Public') {
             steps {
                 sh '''
-                    aws ecr-public get-login-password \
-                    --region ${AWS_REGION} | \
-                    docker login \
-                    --username AWS \
-                    --password-stdin public.ecr.aws
+                aws ecr-public get-login-password \
+                --region ${AWS_REGION} | \
+                docker login \
+                --username AWS \
+                --password-stdin public.ecr.aws
                 '''
             }
         }
@@ -46,7 +71,7 @@ pipeline {
         stage('Tag Docker Image') {
             steps {
                 sh '''
-                    docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${IMAGE_URI}
+                docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${IMAGE_URI}
                 '''
             }
         }
@@ -54,7 +79,7 @@ pipeline {
         stage('Push Docker Image') {
             steps {
                 sh '''
-                    docker push ${IMAGE_URI}
+                docker push ${IMAGE_URI}
                 '''
             }
         }
@@ -62,9 +87,15 @@ pipeline {
         stage('Configure kubectl') {
             steps {
                 sh '''
-                    aws eks update-kubeconfig \
+                aws eks update-kubeconfig \
                     --region ${AWS_REGION} \
                     --name ${CLUSTER_NAME}
+
+                echo "========== Cluster =========="
+                kubectl cluster-info
+
+                echo "========== Nodes =========="
+                kubectl get nodes
                 '''
             }
         }
@@ -72,8 +103,8 @@ pipeline {
         stage('Deploy to Amazon EKS') {
             steps {
                 sh '''
-                    kubectl apply -f deployment.yaml
-                    kubectl apply -f service.yaml
+                kubectl apply -f deployment.yaml
+                kubectl apply -f service.yaml
                 '''
             }
         }
@@ -81,9 +112,9 @@ pipeline {
         stage('Rolling Update') {
             steps {
                 sh '''
-                    kubectl rollout restart deployment/${DEPLOYMENT_NAME} -n ${NAMESPACE}
+                kubectl rollout restart deployment/${DEPLOYMENT_NAME}
 
-                    kubectl rollout status deployment/${DEPLOYMENT_NAME} -n ${NAMESPACE}
+                kubectl rollout status deployment/${DEPLOYMENT_NAME}
                 '''
             }
         }
@@ -91,46 +122,62 @@ pipeline {
         stage('Verify Deployment') {
             steps {
                 sh '''
-                    echo "========== Nodes =========="
-                    kubectl get nodes
+                echo "========== Nodes =========="
+                kubectl get nodes
 
-                    echo "========== Pods =========="
-                    kubectl get pods -o wide
+                echo "========== Pods =========="
+                kubectl get pods -o wide
 
-                    echo "========== Deployment =========="
-                    kubectl get deployment
+                echo "========== Deployments =========="
+                kubectl get deployments
 
-                    echo "========== Services =========="
-                    kubectl get svc
+                echo "========== ReplicaSets =========="
+                kubectl get rs
+
+                echo "========== Services =========="
+                kubectl get svc
+
+                echo "========== Describe Deployment =========="
+                kubectl describe deployment ${DEPLOYMENT_NAME}
                 '''
             }
         }
-
     }
 
     post {
 
         success {
 
-            echo '======================================='
-            echo 'Build Successful'
-            echo 'Docker Image Built Successfully'
-            echo 'Image Pushed to Amazon ECR'
-            echo 'Application Deployed to Amazon EKS'
-            echo 'Rolling Update Completed'
-            echo '======================================='
+            echo "=========================================="
+            echo "CI/CD PIPELINE COMPLETED SUCCESSFULLY"
+            echo "=========================================="
 
             sh '''
-                kubectl get svc
+            echo "========== Final Services =========="
+            kubectl get svc
+
+            echo "========== External URL =========="
+            kubectl get svc ${SERVICE_NAME}
             '''
         }
 
         failure {
 
-            echo '======================================='
-            echo 'Pipeline Failed'
-            echo 'Please Check Jenkins Console Output'
-            echo '======================================='
+            echo "=========================================="
+            echo "PIPELINE FAILED"
+            echo "=========================================="
+
+            sh '''
+            kubectl get pods --all-namespaces || true
+
+            kubectl get deployments || true
+
+            kubectl get svc || true
+            '''
+        }
+
+        always {
+            cleanWs()
         }
     }
 }
