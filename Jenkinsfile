@@ -3,13 +3,13 @@ pipeline {
 
     environment {
 
-        AWS_REGION = 'us-east-1'
+        AWS_REGION = 'us-east-1c'
 
         IMAGE_NAME = 'static-website'
         IMAGE_TAG  = 'latest'
         IMAGE_URI  = 'public.ecr.aws/z4f5h9h6/static-website:latest'
 
-        CLUSTER_NAME = 'my_EKS_OF_STATIC_WEB'
+        CLUSTER_NAME = 'my_eks_static_web'
 
         DEPLOYMENT_NAME = 'static-website'
         NAMESPACE = 'default'
