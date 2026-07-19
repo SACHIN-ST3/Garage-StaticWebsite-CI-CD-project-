@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: static-website
+  labels:
+    app: static-website
+
+spec:
+  replicas: 2
+
+  selector:
+    matchLabels:
+      app: static-website
+
+  template:
+    metadata:
+      labels:
+        app: static-website
+
+    spec:
+      containers:
+      - name: static-website
+
+        image: public.ecr.aws/z4f5h9h6/static-website:latest
+
+        imagePullPolicy: Always
+
+        ports:
+        - containerPort: 80
+
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+
+          limits:
+            memory: "256Mi"
+            cpu: "250m"
