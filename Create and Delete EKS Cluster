@@ -1,0 +1,20 @@
+=============================================
++++ CREATE EKS CLUSTER THROUGH CMD  +++
+=============================================
+
+eksctl create cluster \
+--name my-static-website-cluster \
+--region us-east-1 \
+--nodegroup-name workers \
+--node-type t3.medium \
+--nodes 2 \
+--managed
+
+
+=============================================
++++ DELETE EKS CLUSTER THROUGH CMD  +++
+============================================
+
+eksctl delete cluster \
+--name my-static-website-cluster \
+--region us-east-1
